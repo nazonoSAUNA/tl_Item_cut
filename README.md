@@ -2,12 +2,13 @@
 拡張編集の「切り取り」が特殊な為、皆が思うような切り取りを実装
 リップル切り取りも実装
 
-## 動作要件
-- Visual C++ 再頒布可能パッケージの2022 x86(32bit)対応の物がインストールされている必要があります【Microsoft Visual C++ 2015-2022 Redistributable(x86)】
-- マイクロソフト公式:< https://docs.microsoft.com/ja-jp/cpp/windows/latest-supported-vc-redist >
-- AviUtl解説サイト:< https://scrapbox.io/aviutl/Visual_C++_再頒布可能パッケージ >
+[ダウンロードはこちら](../../releases/)
 
-- 拡張編集0.92のみ動作します
+## 動作要件
+- Visual C++ 再頒布可能パッケージの2022 x86(32bit)対応の物がインストールされている必要があります【Microsoft Visual C++ 2015-2022 Redistributable(x86)】→ 導入方法:< https://scrapbox.io/nazosauna/Visual_C++_再頒布可能パッケージをインストールする >
+
+- 拡張編集バージョン0.92のみ対応しています
+
 
 ## 仕様
 - ショートカットに[切り取り][切り取り]・[切り取り][リップル]・[切り取り][TLリップル]を追加します
