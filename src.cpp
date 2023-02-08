@@ -4,6 +4,9 @@
 
 #define TL_ITEM_CUT (WM_USER + 0x46)
 #define TL_ITEM_CUT_RIPPLE (WM_USER + 0x47)
+#define TL_CUT_RIPPLE (WM_USER + 0x5e)
+
+static const char tl_ripple[] = ("TLリップル");
 
 FILTER_DLL filter = {
     FILTER_FLAG_ALWAYS_ACTIVE,
@@ -53,16 +56,35 @@ static inline void(__cdecl* setundo)(int objidx, int flag);
 static inline void(__cdecl* delobj)(int objidx); // 34500
 static inline void(__cdecl* drawtimeline)(); // 39230
 
-void cut() {
+void select_dialog_obj() {
+    int objidx = *SettingDialogObjectIndex;
+    auto obj = *ObjectArray_ptr;
+    int ledidx = obj[objidx].index_midpt_leader;
+    if (ledidx == -1) {
+        SelectingObjectIndex[0] = objidx;
+        *SelectingObjectNum_ptr = 1;
+    } else {
+        int i = 0;
+        objidx = ledidx;
+        while (0 <= objidx) {
+            SelectingObjectIndex[i] = objidx;
+            i++;
+            objidx = NextObjectIndex[objidx];
+        }
+        *SelectingObjectNum_ptr = i;
+    }
+}
+
+void item_cut() {
     SendMessageA(exeditfp->hwnd, WM_COMMAND, 1008, -1);
     SendMessageA(exeditfp->hwnd, WM_COMMAND, 1001, -1);
 }
 
 
-void ripple_cut() {
-    auto obj = *ObjectArray_ptr;
+void item_ripple_cut() {
     int n = *SelectingObjectNum_ptr;
     if (0 < n) {
+        auto obj = *ObjectArray_ptr;
         int* exeditbuf = *exeditbuf_ptr;
         int objectalloc = *ObjectAlloc_ptr;
         memset(exeditbuf, 0, objectalloc * 4);
@@ -120,26 +142,50 @@ void ripple_cut() {
         }
         drawtimeline();
     } else if (0 <= *SettingDialogObjectIndex) {
-        int objidx = *SettingDialogObjectIndex;
-        int ledidx = obj[objidx].index_midpt_leader;
-        if (ledidx == -1) {
-            SelectingObjectIndex[0] = objidx;
-            *SelectingObjectNum_ptr = 1;
-        } else {
-            int i = 0;
-            objidx = ledidx;
-            while (0 <= objidx) {
-                SelectingObjectIndex[i] = objidx;
-                i++;
-                objidx = NextObjectIndex[objidx];
-            }
-            *SelectingObjectNum_ptr = i;
-        }
-        ripple_cut();
+        select_dialog_obj();
+        item_ripple_cut();
     }
 }
 
+void select_all() {
+    auto obj = *ObjectArray_ptr;
+    int objectalloc = *ObjectAlloc_ptr;
+    int n = 0;
+    for (int i = 0; i < objectalloc; i++) {
+        if (obj->layer_disp != -1) {
+            SelectingObjectIndex[n] = i;
+            n++;
+        }
+        obj++;
+    }
+    *SelectingObjectNum_ptr = n;
+}
 
+void tl_ripple_cut(void* editp, FILTER* fp) {
+    int n = *SelectingObjectNum_ptr;
+    if (0 < n) {
+        auto obj = *ObjectArray_ptr;
+        int frame_begin = INT_MAX;
+        int frame_end = -1;
+        for (int i = 0; i < n; i++) {
+            auto selectobj = obj + SelectingObjectIndex[i];
+            if (selectobj->frame_begin < frame_begin) {
+                frame_begin = selectobj->frame_begin;
+            }
+            if (frame_end < selectobj->frame_end) {
+                frame_end = selectobj->frame_end;
+            }
+        }
+        if (frame_begin < frame_end) {
+            fp->exfunc->set_select_frame(editp, frame_begin, frame_end);
+            select_all();
+            SendMessageA(exeditfp->hwnd, WM_COMMAND, 1094, -1);
+        }
+    } else if (0 <= *SettingDialogObjectIndex) {
+        select_dialog_obj();
+        tl_ripple_cut(editp, fp);
+    }
+}
 
 BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* editp, FILTER* fp) {
     switch (message) {
@@ -150,7 +196,9 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
             break;
         }
         fp->exfunc->add_menu_item(fp, fp->name, fp->hwnd, TL_ITEM_CUT, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL);
-        fp->exfunc->add_menu_item(fp, const_cast<char*>("リップル"), fp->hwnd, TL_ITEM_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_SHIFT);
+        fp->exfunc->add_menu_item(fp, (LPSTR)&tl_ripple[2], fp->hwnd, TL_ITEM_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_SHIFT);
+        fp->exfunc->add_menu_item(fp, (LPSTR)tl_ripple, fp->hwnd, TL_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_ALT);
+
         
         exeditbuf_ptr = (int**)((int)exeditfp->dll_hinst + 0x1a5328);
         ObjectAlloc_ptr = (int*)((int)exeditfp->dll_hinst + 0x1e0fa0);
@@ -172,10 +220,13 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
     case WM_FILTER_COMMAND:
         switch (wparam) {
         case TL_ITEM_CUT:
-            cut();
+            item_cut();
             break;
         case TL_ITEM_CUT_RIPPLE:
-            ripple_cut();
+            item_ripple_cut();
+            break;
+        case TL_CUT_RIPPLE:
+            tl_ripple_cut(editp, fp);
         }
     }
     return FALSE;
