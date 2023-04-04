@@ -152,7 +152,7 @@ void select_all() {
     int objectalloc = *ObjectAlloc_ptr;
     int n = 0;
     for (int i = 0; i < objectalloc; i++) {
-        if (obj->layer_disp != -1) {
+        if ((*(int*)&obj->flag & 1) && obj->layer_disp != -1) {
             SelectingObjectIndex[n] = i;
             n++;
         }
