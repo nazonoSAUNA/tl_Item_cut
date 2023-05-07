@@ -6,7 +6,10 @@
 #define TL_ITEM_CUT_RIPPLE (WM_USER + 0x47)
 #define TL_CUT_RIPPLE (WM_USER + 0x5e)
 
+#define TL_ITEM_GROUP_SPLIT (WM_USER + 0x1b)
+
 static const char tl_ripple[] = ("TLリップル");
+static const char group_split[] = ("グループ分割");
 
 FILTER_DLL filter = {
     FILTER_FLAG_ALWAYS_ACTIVE,
@@ -50,6 +53,7 @@ int* SelectingObjectIndex; // 0x179230
 int* SettingDialogObjectIndex; // 0x177a10
 int* NextObjectIndex; // 0x1592d8
 int* undo_id_ptr; // 0x244e14
+int* split_mode; // 0x1538b0
 
 static inline void(__cdecl* nextundo)();
 static inline void(__cdecl* setundo)(int objidx, int flag);
@@ -186,6 +190,44 @@ void tl_ripple_cut(void* editp, FILTER* fp) {
         tl_ripple_cut(editp, fp);
     }
 }
+void item_group_split(void* editp, FILTER* fp) {
+    if (*SettingDialogObjectIndex < 0) return;
+
+    int frame = fp->exfunc->get_frame(editp);
+    auto obj = *ObjectArray_ptr + *SettingDialogObjectIndex;
+    if ((int)obj->flag == 0) return;
+
+    int group_belong = obj->group_belong;
+    if (group_belong == 0) {
+        group_belong = -1;
+    }
+    int index_midpt_leader = obj->index_midpt_leader;
+    if (index_midpt_leader == -1) {
+        index_midpt_leader = -2;
+    }
+    obj = *ObjectArray_ptr;
+
+
+    int n = 1;
+    SelectingObjectIndex[0] = *SettingDialogObjectIndex;
+    for (int i = 0; i < *ObjectAlloc_ptr; i++) {
+        if (((int)obj->flag & 1) && obj->layer_disp != -1 && (obj->group_belong == group_belong || obj->index_midpt_leader == index_midpt_leader) && i != *SettingDialogObjectIndex) {
+            SelectingObjectIndex[n] = i;
+            n++;
+        }
+        obj++;
+    }
+    *SelectingObjectNum_ptr = n;
+    
+    int split_mode_org = *split_mode;
+    *split_mode = 1;
+    SendMessageA(exeditfp->hwnd, WM_COMMAND, 1051, -1);
+    *split_mode = split_mode_org;
+
+    *SelectingObjectNum_ptr = 0;
+    drawtimeline();
+
+}
 
 BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* editp, FILTER* fp) {
     switch (message) {
@@ -198,6 +240,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         fp->exfunc->add_menu_item(fp, fp->name, fp->hwnd, TL_ITEM_CUT, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL);
         fp->exfunc->add_menu_item(fp, (LPSTR)&tl_ripple[2], fp->hwnd, TL_ITEM_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_SHIFT);
         fp->exfunc->add_menu_item(fp, (LPSTR)tl_ripple, fp->hwnd, TL_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_ALT);
+        fp->exfunc->add_menu_item(fp, (LPSTR)group_split, fp->hwnd, TL_ITEM_GROUP_SPLIT, NULL, NULL);
 
         
         exeditbuf_ptr = (int**)((int)exeditfp->dll_hinst + 0x1a5328);
@@ -211,6 +254,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         SettingDialogObjectIndex = (int*)((int)exeditfp->dll_hinst + 0x177a10);
         NextObjectIndex = (int*)((int)exeditfp->dll_hinst + 0x1592d8);
         undo_id_ptr = (int*)((int)exeditfp->dll_hinst + 0x244e14);
+        split_mode = (int*)((int)exeditfp->dll_hinst + 0x1538b0);
         nextundo = reinterpret_cast<decltype(nextundo)>((int)exeditfp->dll_hinst + 0x8d150);
         setundo = reinterpret_cast<decltype(setundo)>((int)exeditfp->dll_hinst + 0x8d290);
         delobj = reinterpret_cast<decltype(delobj)>((int)exeditfp->dll_hinst + 0x34500);
@@ -227,6 +271,9 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
             break;
         case TL_CUT_RIPPLE:
             tl_ripple_cut(editp, fp);
+            break;
+        case TL_ITEM_GROUP_SPLIT:
+            item_group_split(editp, fp);
         }
     }
     return FALSE;
