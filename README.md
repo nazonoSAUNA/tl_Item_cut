@@ -42,4 +42,5 @@ TLリップル実装時までの紹介動画 https://www.nicovideo.jp/watch/sm41
 ![cut5](https://user-images.githubusercontent.com/99536641/217500805-040a2d2a-952e-459e-a700-fe27995524cc.png)
 
 - 前ギャップ削除
+
 ![image](https://github.com/nazonoSAUNA/tl_Item_cut/assets/99536641/11c8238c-b301-4ab3-bcdf-065c962c7f3a)
