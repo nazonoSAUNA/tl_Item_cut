@@ -4,12 +4,14 @@
 
 #define TL_ITEM_CUT (WM_USER + 0x46)
 #define TL_ITEM_CUT_RIPPLE (WM_USER + 0x47)
+#define TL_ITEM_PREV_GAP_DEL (WM_USER + 0x48)
 #define TL_CUT_RIPPLE (WM_USER + 0x5e)
 
 #define TL_ITEM_GROUP_SPLIT (WM_USER + 0x1b)
 
 static const char tl_ripple[] = ("TLリップル");
 static const char group_split[] = ("グループ分割");
+static const char prev_gap_del[] = ("前ギャップ削除");
 
 FILTER_DLL filter = {
     FILTER_FLAG_ALWAYS_ACTIVE,
@@ -59,6 +61,44 @@ static inline void(__cdecl* nextundo)();
 static inline void(__cdecl* setundo)(int objidx, int flag);
 static inline void(__cdecl* delobj)(int objidx); // 34500
 static inline void(__cdecl* drawtimeline)(); // 39230
+static inline void(__cdecl* update_setting_dialog_top)(); // 2c580
+
+void sort_select_obj() {
+    int n = *SelectingObjectNum_ptr - 1;
+    if (n < 1) return;
+
+    auto obj = *ObjectArray_ptr;
+    int sort_begin = 0;
+    int sort_end = n;
+    while (true) {
+        int lastswap = 0;
+        int i = sort_begin;
+        int j = i + n;
+        while (j <= sort_end) {
+            if (obj[SelectingObjectIndex[i]].frame_begin > obj[SelectingObjectIndex[j]].frame_begin) {
+                std::swap(SelectingObjectIndex[i], SelectingObjectIndex[j]);
+                lastswap = i;
+            }
+            i++; j++;
+        }
+        switch (n) {
+        case 12: case 13: case 14: case 15:
+            n = 11;
+            break;
+        case 1:
+            if (lastswap == 0) return;
+            sort_end = lastswap;
+            break;
+        default:
+            n = n * 10 / 13;
+        }
+    }
+
+    for (int i = 0; i < n; i++) {
+        auto selectobj = obj + SelectingObjectIndex[i];
+
+    }
+}
 
 void select_dialog_obj() {
     int objidx = *SettingDialogObjectIndex;
@@ -190,6 +230,48 @@ void tl_ripple_cut(void* editp, FILTER* fp) {
         tl_ripple_cut(editp, fp);
     }
 }
+
+void tl_prev_gap_del() {
+    int n = *SelectingObjectNum_ptr;
+    if (0 < n) {
+        sort_select_obj();
+        auto obj = *ObjectArray_ptr;
+        int flag = 1;
+        for (int i = 0; i < n; i++) {
+            auto selectobj = obj + SelectingObjectIndex[i];
+            if ((*(int*)&selectobj->flag & 1)) {
+                int layer = selectobj->layer_set;
+                int begin_idx = SortedObjectLayerBeginIndex[layer];
+                for (int j = begin_idx; j <= SortedObjectLayerEndIndex[layer]; j++) {
+                    if (SortedObject[j] == selectobj) {
+                        int gap;
+                        if (begin_idx == j) {
+                            gap = selectobj->frame_begin;
+                        } else {
+                            gap = selectobj->frame_begin - SortedObject[j - 1]->frame_end - 1;
+                        }
+                        if (0 < gap) {
+                            if (flag) {
+                                flag = 0;
+                                nextundo();
+                            }
+                            setundo(SelectingObjectIndex[i], 8);
+                            selectobj->frame_begin -= gap;
+                            selectobj->frame_end -= gap;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        drawtimeline();
+        update_setting_dialog_top();
+    } else if (0 <= *SettingDialogObjectIndex) {
+        select_dialog_obj();
+        tl_prev_gap_del();
+    }
+}
+
 void item_group_split(void* editp, FILTER* fp) {
     if (*SettingDialogObjectIndex < 0) return;
 
@@ -241,6 +323,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         fp->exfunc->add_menu_item(fp, (LPSTR)&tl_ripple[2], fp->hwnd, TL_ITEM_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_SHIFT);
         fp->exfunc->add_menu_item(fp, (LPSTR)tl_ripple, fp->hwnd, TL_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_ALT);
         fp->exfunc->add_menu_item(fp, (LPSTR)group_split, fp->hwnd, TL_ITEM_GROUP_SPLIT, NULL, NULL);
+        fp->exfunc->add_menu_item(fp, (LPSTR)prev_gap_del, fp->hwnd, TL_ITEM_PREV_GAP_DEL, NULL, NULL);
 
         
         exeditbuf_ptr = (int**)((int)exeditfp->dll_hinst + 0x1a5328);
@@ -259,6 +342,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         setundo = reinterpret_cast<decltype(setundo)>((int)exeditfp->dll_hinst + 0x8d290);
         delobj = reinterpret_cast<decltype(delobj)>((int)exeditfp->dll_hinst + 0x34500);
         drawtimeline = reinterpret_cast<decltype(drawtimeline)>((int)exeditfp->dll_hinst + 0x39230);
+        update_setting_dialog_top = reinterpret_cast<decltype(update_setting_dialog_top)>((int)exeditfp->dll_hinst + 0x2c580);
 
         break;
     case WM_FILTER_COMMAND:
@@ -271,6 +355,9 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
             break;
         case TL_CUT_RIPPLE:
             tl_ripple_cut(editp, fp);
+            break;
+        case TL_ITEM_PREV_GAP_DEL:
+            tl_prev_gap_del();
             break;
         case TL_ITEM_GROUP_SPLIT:
             item_group_split(editp, fp);
