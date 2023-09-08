@@ -8,10 +8,12 @@
 #define TL_CUT_RIPPLE (WM_USER + 0x5e)
 
 #define TL_ITEM_GROUP_SPLIT (WM_USER + 0x1b)
+#define TL_ITEM_GROUP_RIPPLE (WM_USER + 0x1c)
 
 static const char tl_ripple[] = ("TLリップル");
-static const char group_split[] = ("グループ分割");
 static const char prev_gap_del[] = ("前ギャップ削除");
+static const char group_split[] = ("グループ分割");
+static const char group_ripple[] = ("グループリップル");
 
 FILTER_DLL filter = {
     FILTER_FLAG_ALWAYS_ACTIVE,
@@ -62,6 +64,7 @@ static inline void(__cdecl* setundo)(int objidx, int flag);
 static inline void(__cdecl* delobj)(int objidx); // 34500
 static inline void(__cdecl* drawtimeline)(); // 39230
 static inline void(__cdecl* update_setting_dialog_top)(); // 2c580
+static inline void(__cdecl* disp_near_setting_dialog)(); // 446d0
 
 void sort_select_obj() {
     int n = *SelectingObjectNum_ptr - 1;
@@ -119,6 +122,35 @@ void select_dialog_obj() {
     }
 }
 
+void select_dialog_group_obj() {
+    if (*SettingDialogObjectIndex < 0) return;
+
+    auto obj = *ObjectArray_ptr + *SettingDialogObjectIndex;
+    if ((int)obj->flag == 0) return;
+
+    int group_belong = obj->group_belong;
+    if (group_belong == 0) {
+        group_belong = -1;
+    }
+    int index_midpt_leader = obj->index_midpt_leader;
+    if (index_midpt_leader == -1) {
+        index_midpt_leader = -2;
+    }
+    obj = *ObjectArray_ptr;
+
+    int n = 1;
+    SelectingObjectIndex[0] = *SettingDialogObjectIndex;
+    for (int i = 0; i < *ObjectAlloc_ptr; i++) {
+        if (((int)obj->flag & 1) && obj->layer_disp != -1 && (obj->group_belong == group_belong || obj->index_midpt_leader == index_midpt_leader) && i != *SettingDialogObjectIndex) {
+            SelectingObjectIndex[n] = i;
+            n++;
+        }
+        obj++;
+    }
+    *SelectingObjectNum_ptr = n;
+}
+
+
 void item_cut() {
     SendMessageA(exeditfp->hwnd, WM_COMMAND, 1008, -1);
     SendMessageA(exeditfp->hwnd, WM_COMMAND, 1001, -1);
@@ -136,7 +168,7 @@ void item_ripple_cut() {
         for (int i = 0; i < n; i++) {
             auto selectobj = obj + SelectingObjectIndex[i];
             int objidx = ((int)selectobj - (int)obj) / sizeof(ExEdit::Object);
-            if ((*(int*)&selectobj->flag & 1) && 0 <= exeditbuf[objidx]) {
+            if (((int)selectobj->flag & 1) && 0 <= exeditbuf[objidx]) {
                 int frame = 0;
                 int ledidx = selectobj->index_midpt_leader;
                 if (ledidx == -1) {
@@ -164,21 +196,18 @@ void item_ripple_cut() {
             }
         }
 
+        disp_near_setting_dialog();
         nextundo();
         for (int i = 0; i < n; i++) {
             auto selectobj = obj + SelectingObjectIndex[i];
-            if (*(int*)&selectobj->flag & 1) {
+            if ((int)selectobj->flag & 1) {
                 int objidx = ((int)selectobj - (int)obj) / sizeof(ExEdit::Object);
                 delobj(objidx);
             }
         }
         *SelectingObjectNum_ptr = 0;
-        int flag = 1;
         for (int i = 0; i < objectalloc; i++) {
-            if ((*(int*)&obj[i].flag & 1) && 0 < exeditbuf[i]) {
-                if (flag) {
-                    flag = 0;
-                }
+            if (((int)obj[i].flag & 1) && 0 < exeditbuf[i]) {
                 setundo(i, 8);
                 obj[i].frame_begin -= exeditbuf[i];
                 obj[i].frame_end -= exeditbuf[i];
@@ -196,7 +225,7 @@ void select_all() {
     int objectalloc = *ObjectAlloc_ptr;
     int n = 0;
     for (int i = 0; i < objectalloc; i++) {
-        if ((*(int*)&obj->flag & 1) && obj->layer_disp != -1) {
+        if (((int)obj->flag & 1) && obj->layer_disp != -1) {
             SelectingObjectIndex[n] = i;
             n++;
         }
@@ -231,7 +260,7 @@ void tl_ripple_cut(void* editp, FILTER* fp) {
     }
 }
 
-void tl_prev_gap_del() {
+void item_prev_gap_del() {
     int n = *SelectingObjectNum_ptr;
     if (0 < n) {
         sort_select_obj();
@@ -239,7 +268,7 @@ void tl_prev_gap_del() {
         int flag = 1;
         for (int i = 0; i < n; i++) {
             auto selectobj = obj + SelectingObjectIndex[i];
-            if ((*(int*)&selectobj->flag & 1)) {
+            if (((int)selectobj->flag & 1)) {
                 int layer = selectobj->layer_set;
                 int begin_idx = SortedObjectLayerBeginIndex[layer];
                 for (int j = begin_idx; j <= SortedObjectLayerEndIndex[layer]; j++) {
@@ -268,38 +297,13 @@ void tl_prev_gap_del() {
         update_setting_dialog_top();
     } else if (0 <= *SettingDialogObjectIndex) {
         select_dialog_obj();
-        tl_prev_gap_del();
+        item_prev_gap_del();
     }
 }
 
-void item_group_split(void* editp, FILTER* fp) {
-    if (*SettingDialogObjectIndex < 0) return;
-
-    int frame = fp->exfunc->get_frame(editp);
-    auto obj = *ObjectArray_ptr + *SettingDialogObjectIndex;
-    if ((int)obj->flag == 0) return;
-
-    int group_belong = obj->group_belong;
-    if (group_belong == 0) {
-        group_belong = -1;
-    }
-    int index_midpt_leader = obj->index_midpt_leader;
-    if (index_midpt_leader == -1) {
-        index_midpt_leader = -2;
-    }
-    obj = *ObjectArray_ptr;
-
-
-    int n = 1;
-    SelectingObjectIndex[0] = *SettingDialogObjectIndex;
-    for (int i = 0; i < *ObjectAlloc_ptr; i++) {
-        if (((int)obj->flag & 1) && obj->layer_disp != -1 && (obj->group_belong == group_belong || obj->index_midpt_leader == index_midpt_leader) && i != *SettingDialogObjectIndex) {
-            SelectingObjectIndex[n] = i;
-            n++;
-        }
-        obj++;
-    }
-    *SelectingObjectNum_ptr = n;
+void item_group_split() {
+    select_dialog_group_obj();
+    if (*SelectingObjectNum_ptr <= 0) return;
     
     int split_mode_org = *split_mode;
     *split_mode = 1;
@@ -308,7 +312,12 @@ void item_group_split(void* editp, FILTER* fp) {
 
     *SelectingObjectNum_ptr = 0;
     drawtimeline();
+}
+void item_group_ripple() {
+    select_dialog_group_obj();
+    if (*SelectingObjectNum_ptr <= 0) return;
 
+    item_ripple_cut();
 }
 
 BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* editp, FILTER* fp) {
@@ -322,8 +331,9 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         fp->exfunc->add_menu_item(fp, fp->name, fp->hwnd, TL_ITEM_CUT, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL);
         fp->exfunc->add_menu_item(fp, (LPSTR)&tl_ripple[2], fp->hwnd, TL_ITEM_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_SHIFT);
         fp->exfunc->add_menu_item(fp, (LPSTR)tl_ripple, fp->hwnd, TL_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_ALT);
-        fp->exfunc->add_menu_item(fp, (LPSTR)group_split, fp->hwnd, TL_ITEM_GROUP_SPLIT, NULL, NULL);
         fp->exfunc->add_menu_item(fp, (LPSTR)prev_gap_del, fp->hwnd, TL_ITEM_PREV_GAP_DEL, NULL, NULL);
+        fp->exfunc->add_menu_item(fp, (LPSTR)group_split, fp->hwnd, TL_ITEM_GROUP_SPLIT, NULL, NULL);
+        fp->exfunc->add_menu_item(fp, (LPSTR)group_ripple, fp->hwnd, TL_ITEM_GROUP_RIPPLE, NULL, NULL);
 
         
         exeditbuf_ptr = (int**)((int)exeditfp->dll_hinst + 0x1a5328);
@@ -343,6 +353,8 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         delobj = reinterpret_cast<decltype(delobj)>((int)exeditfp->dll_hinst + 0x34500);
         drawtimeline = reinterpret_cast<decltype(drawtimeline)>((int)exeditfp->dll_hinst + 0x39230);
         update_setting_dialog_top = reinterpret_cast<decltype(update_setting_dialog_top)>((int)exeditfp->dll_hinst + 0x2c580);
+        disp_near_setting_dialog = reinterpret_cast<decltype(disp_near_setting_dialog)>((int)exeditfp->dll_hinst + 0x446d0);
+
 
         break;
     case WM_FILTER_COMMAND:
@@ -357,10 +369,13 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
             tl_ripple_cut(editp, fp);
             break;
         case TL_ITEM_PREV_GAP_DEL:
-            tl_prev_gap_del();
+            item_prev_gap_del();
             break;
         case TL_ITEM_GROUP_SPLIT:
-            item_group_split(editp, fp);
+            item_group_split();
+            break;
+        case TL_ITEM_GROUP_RIPPLE:
+            item_group_ripple();
         }
     }
     return FALSE;
