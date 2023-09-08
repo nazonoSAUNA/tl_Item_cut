@@ -8,11 +8,13 @@
 #define TL_CUT_RIPPLE (WM_USER + 0x5e)
 
 #define TL_ITEM_GROUP_SPLIT (WM_USER + 0x1b)
-#define TL_ITEM_GROUP_RIPPLE (WM_USER + 0x1c)
+#define TL_ITEM_GROUP_CUT (WM_USER + 0x1c)
+#define TL_ITEM_GROUP_RIPPLE (WM_USER + 0x1d)
 
 static const char tl_ripple[] = ("TLリップル");
 static const char prev_gap_del[] = ("前ギャップ削除");
 static const char group_split[] = ("グループ分割");
+static const char group_cut[] = ("グループ切り取り");
 static const char group_ripple[] = ("グループリップル");
 
 FILTER_DLL filter = {
@@ -313,6 +315,12 @@ void item_group_split() {
     *SelectingObjectNum_ptr = 0;
     drawtimeline();
 }
+void item_group_cut() {
+    select_dialog_group_obj();
+    if (*SelectingObjectNum_ptr <= 0) return;
+
+    item_cut();
+}
 void item_group_ripple() {
     select_dialog_group_obj();
     if (*SelectingObjectNum_ptr <= 0) return;
@@ -333,6 +341,7 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
         fp->exfunc->add_menu_item(fp, (LPSTR)tl_ripple, fp->hwnd, TL_CUT_RIPPLE, 'X', ADD_MENU_ITEM_FLAG_KEY_CTRL | ADD_MENU_ITEM_FLAG_KEY_ALT);
         fp->exfunc->add_menu_item(fp, (LPSTR)prev_gap_del, fp->hwnd, TL_ITEM_PREV_GAP_DEL, NULL, NULL);
         fp->exfunc->add_menu_item(fp, (LPSTR)group_split, fp->hwnd, TL_ITEM_GROUP_SPLIT, NULL, NULL);
+        fp->exfunc->add_menu_item(fp, (LPSTR)group_cut, fp->hwnd, TL_ITEM_GROUP_CUT, NULL, NULL);
         fp->exfunc->add_menu_item(fp, (LPSTR)group_ripple, fp->hwnd, TL_ITEM_GROUP_RIPPLE, NULL, NULL);
 
         
@@ -364,18 +373,22 @@ BOOL func_WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam, void* e
             break;
         case TL_ITEM_CUT_RIPPLE:
             item_ripple_cut();
-            break;
+            return TRUE;
         case TL_CUT_RIPPLE:
             tl_ripple_cut(editp, fp);
             break;
         case TL_ITEM_PREV_GAP_DEL:
             item_prev_gap_del();
-            break;
+            return TRUE;
         case TL_ITEM_GROUP_SPLIT:
             item_group_split();
             break;
+        case TL_ITEM_GROUP_CUT:
+            item_group_cut();
+            break;
         case TL_ITEM_GROUP_RIPPLE:
             item_group_ripple();
+            return TRUE;
         }
     }
     return FALSE;
