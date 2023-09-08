@@ -26,7 +26,7 @@ TLリップル実装時までの紹介動画 https://www.nicovideo.jp/watch/sm41
 - [切り取り][グループ分割]はグループ化されているオブジェクトをまとめて分割します（拡張編集ショートカットＳの分割ではグループごと分割できないためその改善版）
 
 
-- 以下を選択した状態で各切り取りを行った時の挙動を示す
+- 以下、Ctrlを押しながら選択した状態で各切り取りを行った時の挙動を示す
 
 ![cut1](https://user-images.githubusercontent.com/99536641/217500789-abf8dfa0-5280-44d9-919d-6da92cd01824.png)
 
@@ -39,3 +39,6 @@ TLリップル実装時までの紹介動画 https://www.nicovideo.jp/watch/sm41
 ![cut4](https://user-images.githubusercontent.com/99536641/217500802-a564ccd1-4e95-4250-941f-17232b4770f4.png)
 
 ![cut5](https://user-images.githubusercontent.com/99536641/217500805-040a2d2a-952e-459e-a700-fe27995524cc.png)
+
+- 前ギャップ削除
+![image](https://github.com/nazonoSAUNA/tl_Item_cut/assets/99536641/11c8238c-b301-4ab3-bcdf-065c962c7f3a)
